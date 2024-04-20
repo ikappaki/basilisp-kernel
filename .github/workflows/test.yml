@@ -1,0 +1,32 @@
+name: Basilisp Jupyter Kernel package
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "pypy-3.10"]
+        include:
+          - os: windows-latest
+            python-version: "3.12"
+          - os: macos-latest
+            python-version: "3.12"
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v4
+      - name: Install dependencies
+        run: |
+          pip install -e ".[test]"
+      - name: Test with kernel tester
+        run: |
+          python -m unittest -v
+      - name: Check Kernel
+        run: |
+          cd $HOME
+          jupyter kernelspec list | grep basilisp

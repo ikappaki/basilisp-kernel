@@ -1,0 +1,50 @@
+[build-system]
+requires = [
+    "hatchling>=1.10.0", "ipykernel"
+]
+build-backend = "hatchling.build"
+
+[project]
+name = "basilisp-kernel"
+dynamic = [
+    "version",
+]
+description = "Basilisp kernel for Jupyter"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "ikappaki"}
+]
+classifiers = [
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "ipykernel",
+    "jupyter_client",
+    "basilisp"
+]
+
+[project.optional-dependencies]
+test = [
+  "jupyter_kernel_test",
+]
+
+[project.urls]
+Homepage = "https://github.com/ikappaki/basilisp-kernel"
+
+[tool.hatch.version]
+path = "basilisp_kernel/__init__.py"
+
+# Used to call hatch_build.py
+[tool.hatch.build.hooks.custom]
+
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/basilisp_kernel",
+]
+
+[tool.hatch.build.targets.wheel.shared-data]
+"data_kernelspec/share" = "share"
