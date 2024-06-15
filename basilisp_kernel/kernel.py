@@ -11,8 +11,6 @@ import re
 from typing import Any, Callable, Optional, Sequence, Type
 import sys
 
-from io import StringIO
-
 opts = {}
 basilisp.init(opts)
 ctx = compiler.CompilerContext(filename="basilisp-kernel", opts=opts)
@@ -25,22 +23,12 @@ cli.eval_str("(ns user (:require clojure.core))", ctx, core_ns, eof)
 _DELIMITED_WORD_PATTERN = re.compile(r"[\[\](){\}\s]+")
 
 def do_execute(code):
-    bas_out = StringIO()
-    bas_err = StringIO()
     with runtime.bindings({
-            runtime.Var.find_safe(sym.symbol("*out*", ns=runtime.CORE_NS)) : bas_out,
-            runtime.Var.find_safe(sym.symbol("*err*", ns=runtime.CORE_NS)) : bas_err
+            runtime.Var.find_safe(sym.symbol("*out*", ns=runtime.CORE_NS)) : sys.stdout,
+            runtime.Var.find_safe(sym.symbol("*err*", ns=runtime.CORE_NS)) : sys.stderr
     }):
-        result = None
-        try:
-            result = cli.eval_str(code, ctx, user_ns, eof)
-        finally:
-            if bas_err.tell() > 0:
-                print(bas_err.getvalue(), file=sys.stderr)
-            if bas_out.tell() > 0:
-                print(bas_out.getvalue())
+        return cli.eval_str(code, ctx, user_ns, eof)
 
-        return result
 
 class BasilispKernel(IPythonKernel):
     implementation = 'basilisp-kernel'
