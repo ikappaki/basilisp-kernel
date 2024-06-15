@@ -6,6 +6,7 @@ from basilisp.lang import compiler as compiler
 from basilisp.lang import reader as reader
 from basilisp.lang import runtime as runtime
 from basilisp.lang import symbol as sym
+from basilisp.lang.exception import format_exception
 
 import re
 from typing import Any, Callable, Optional, Sequence, Type
@@ -27,7 +28,17 @@ def do_execute(code):
             runtime.Var.find_safe(sym.symbol("*out*", ns=runtime.CORE_NS)) : sys.stdout,
             runtime.Var.find_safe(sym.symbol("*err*", ns=runtime.CORE_NS)) : sys.stderr
     }):
-        return cli.eval_str(code, ctx, user_ns, eof)
+        try:
+            return cli.eval_str(code, ctx, user_ns, eof)
+        except reader.SyntaxError as e:
+            msg = "".join(format_exception(e, reader.SyntaxError, e.__traceback__))
+            raise reader.SyntaxError(msg) from None
+        except compiler.CompilerException as e:
+            msg = "".join(format_exception(e, compiler.CompilerException, e.__traceback__))
+            raise compiler.CompilerException(msg, phase=e.phase, filename=e.filename) from None
+        except Exception as e:
+            msg = "".join(format_exception(e, Exception, e.__traceback__))
+            raise Exception(msg) from None
 
 
 class BasilispKernel(IPythonKernel):

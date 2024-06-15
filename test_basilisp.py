@@ -63,6 +63,19 @@ class BasilispKernelTests(jkt.KernelTests):
         {"code": "(map #(* % %) (range 1 4))", "result": "(1 4 9)"},
     ]
 
+    def test_basilisp_kernel_exceptions(self):
+        reply, output_msgs = self.execute_helper(code='#lmn')
+        self.assertEqual("SyntaxError", output_msgs[0]['content']['ename'])
+        self.assertIn("message: No data reader found for tag #lmn", output_msgs[0]['content']['evalue'])
+
+        reply, output_msgs = self.execute_helper(code='(xyz)')
+        self.assertEqual("CompilerException", output_msgs[0]['content']['ename'])
+        self.assertIn("message: unable to resolve symbol 'xyz' in this context", output_msgs[0]['content']['evalue'])
+
+        reply, output_msgs = self.execute_helper(code='(/ 2 0)')
+        self.assertEqual("Exception", output_msgs[0]['content']['ename'])
+        self.assertIn("Traceback (most recent call last):", output_msgs[0]['content']['evalue'])
+
     # code which generates some sort of rich output
     # for each `code` input a single rich display object with the specified
     # `mime` type should be sent to the frontend
