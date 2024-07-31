@@ -30,5 +30,9 @@ jobs:
         pip install hatch
     - name: Build package
       run: hatch build
+    - name: Upload release artifacts
+    - run: gh release upload ${{ github.event.release.tag_name }} dist/*.{tar.gz,whl}
+      env:
+        GH_TOKEN: ${{ github.token }}
     - name: Publish package distributions to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1

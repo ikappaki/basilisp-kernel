@@ -1,14 +1,15 @@
+[![CI](https://github.com/ikappaki/basilisp-kernel/actions/workflows/test.yml/badge.svg)](https://github.com/ikappaki/basilisp-kernel/actions/workflows/test.yml)
+
 # Basilisp Kernel for Jupyter
 
 Welcome to the Basilisp Kernel for Jupyter! This kernel allows you to run Basilisp code directly in your Jupyter notebooks.
 
-Basilisp is a dialect Lisp compatible with Clojure, implemented in Python, that brings the expressiveness of Lisp to the python community. With the Basilisp Kernel, you can combine Lisp's powerful macro system with the extensive ecosystem of Python's scientific computing tools.
+[Basilisp](https://github.com/basilisp-lang/basilisp) is a Python-based Lisp implementation that offers broad compatibility with Clojure.
 
 ## Features
 
 - Full integration with Jupyter Notebook and JupyterLab
 - Enhanced autocompletion features
-- Ability to use Basilisp's macros and special forms in notebooks
 - Seamless interoperability with Python libraries
 
 ## Installation
@@ -44,6 +45,8 @@ For full documentation on Basilisp, visit [Basilisp Documentation](https://basil
 ## Examples
 
 This project includes a series of Jupyter notebooks that demonstrate various features and capabilities. You can find these notebooks in the [notebooks](notebooks) directory of this repository.
+
+![notebook plotting example](notebooks/nb-plot.png)
 
 ## Acknowledgments
 
