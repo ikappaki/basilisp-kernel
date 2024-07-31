@@ -2,8 +2,10 @@
 
 ## Unreleased
 
+## 1.1.0
+
 - Optimized output to stdout/stderr by removing proxy string intermediary.
-- Improved Exception formatting (requires basilisp>=0.1.0b2).
+- Improved Exception formatting (requires basilisp>=0.1.0b2)
 
 ## 1.0.0
 

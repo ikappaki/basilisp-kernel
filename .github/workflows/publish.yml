@@ -16,6 +16,7 @@ jobs:
     environment: release
     permissions:
       id-token: write # IMPORTANT: this permission is mandatory for trusted publishing
+      contents: write # github release upload
 
     steps:
     - uses: actions/checkout@v4
@@ -30,5 +31,9 @@ jobs:
         pip install hatch
     - name: Build package
       run: hatch build
+    - name: Upload release artifacts
+      run: gh release upload ${{ github.event.release.tag_name }} dist/*.{tar.gz,whl}
+      env:
+        GH_TOKEN: ${{ github.token }}
     - name: Publish package distributions to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
