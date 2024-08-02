@@ -1,4 +1,4 @@
-[![CI](https://github.com/ikappaki/basilisp-kernel/actions/workflows/test.yml/badge.svg)](https://github.com/ikappaki/basilisp-kernel/actions/workflows/test.yml)
+[![PyPI](https://img.shields.io/pypi/v/basilisp-kernel.svg?style=flat-square)](https://pypi.org/project/basilisp-kernel/) [![CI](https://github.com/ikappaki/basilisp-kernel/actions/workflows/test.yml/badge.svg)](https://github.com/ikappaki/basilisp-kernel/actions/workflows/test.yml)
 
 # Basilisp Kernel for Jupyter
 
