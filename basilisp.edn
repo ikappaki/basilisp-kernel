@@ -1,0 +1,44 @@
+(import [IPython.display :as id]
+        [ipywidgets :as iw])
+
+
+
+(def v )
+
+(def )
+
+(comment
+(import 
+        [matplotlib.pyplot :as plt])
+
+  (type (iw/Output))
+  ;;
+  )
+
+(defn abc []
+  (let [v (iw.widgets/IntSlider ** :value 0 :min 0 :max 100 :description "hey there")
+        output (iw/Output)]
+    (id/display v output)
+    ))
+
+(def xyz (abc))
+
+(def code-js "
+    const notebook = document.querySelector('#notebook-container') || document.querySelector('.jp-NotebookPanel-notebook');
+    if (notebook) {
+        // For both Classic Notebook and JupyterLab
+        IPython.notebook.insert_cell_below();
+        IPython.notebook.select_next();
+        IPython.notebook.get_selected_cell().set_text("print('This content was injected!')");
+        IPython.notebook.get_selected_cell().execute();
+    }
+    ")
+
+(def code-js2 
+  "var cell = IPython.notebook.insert_cell_below('code');
+   cell.set_text(\"128\");
+   cell.execute()"
+  )
+
+(id/display (id/Javascript
+             code-js2))

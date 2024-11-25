@@ -22,3 +22,5 @@ data_kernelspec
 /notebooks/new
 /notebooks/no2_concentrations.png
 
+.nrepl-port
+.calva/
