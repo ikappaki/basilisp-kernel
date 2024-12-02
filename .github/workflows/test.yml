@@ -34,4 +34,4 @@ jobs:
           hatch run test:basilisp test -- -v
       - name: Check Kernel
         run: |
-          hatch run test:jupyter kernelspec list | grep "jupyter/kernels/basilisp"
+          hatch run test:jupyter kernelspec list | grep -E "jupyter/kernels/basilisp|jupyter\\kernels\\basilisp"
