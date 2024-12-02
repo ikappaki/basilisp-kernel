@@ -1,0 +1,170 @@
+(ns tests.basilisp-kernel.nrepl-server-test
+  (:require
+   [basilisp-kernel.nrepl-server :as nr]
+   [basilisp.io :as bio]
+   [basilisp.contrib.bencode :as bc]
+;;   [basilisp-pprint.pprint :as pp]
+   [basilisp.test :refer [deftest are is testing use-fixtures]]
+   [basilisp.test.fixtures :as fixtures :refer [*tempdir*]]
+   )
+  (:import asyncio
+           os
+           socket))
+
+(use-fixtures :each fixtures/tempdir)
+
+(defn client-make!
+  "Creates and returns an nREPL client."
+  []
+  (let [sock (socket/socket socket/AF_INET socket/SOCK_STREAM)]
+    {:sock sock
+     :backlog* (atom {:items [] :fraction nil})
+     :last-id* (atom 0)}))
+
+(defn client-close!
+  "Closes the nREPL `CLIENT` connection."
+  [client]
+  (.close (:sock client)))
+
+(defn client-send!
+  "Sends `VALUE` (a map) to the nREPL server from the given `CLIENT`."
+  [client value]
+  (let [{:keys [sock last-id*]} client
+        id (swap! last-id* inc)
+        v (bc/encode (assoc value :id id))]
+    (.sendall sock v)))
+
+(defn client-recv!
+  "Receives data from the server via `client`. Processes any backlog or
+  incoming data, decodes it, and returns the first item. Updates the
+  backlog with remaining data."
+  [client]
+  (let [{:keys [sock backlog*]} client
+        zero-bytes #b ""]
+    (loop [{:keys [items fraction]} @backlog*]
+      (if-let [item (first items)]
+        (do (reset! backlog* {:items (drop 1 items) :fraction fraction})
+            item)
+
+        (let [data (.recv sock 8192)]
+          (if (= data zero-bytes)
+            (throw (python/IOError (str [:client-recv!-error :socket-closed])))
+            (let [data (if fraction (+ fraction data) data)
+                  [items-d remaining :as response] (bc/decode-all data {:keywordize-keys true
+                                                                        :string-fn #(.decode % "utf-8")})
+                  items (concat items items-d)
+                  [item & _items-left] items]
+              (recur {:items items :fraction remaining}))))))))
+
+(def ^:dynamic *nrepl-client*
+  "Will be bound to the nREPL client `with-connect` is connected to the
+  nREPL server with."
+  nil)
+
+(defmacro with-connect
+  "A macro that establishes a connection to the specified `port` on
+  the local interface using a new nREPL client. It binds the client to
+  `*nrepl-client*` and executes the `body` forms within this context."
+  [port & body]
+  `(let [{sock# :sock :as client#} (client-make!)]
+     (if-not ~port
+       (throw (python/ValueError [:with-connect-error :invalid-port ~port]))
+
+       (try
+         (binding [*nrepl-client* client#]
+           (.connect sock# (python/tuple ["127.0.0.1" ~port]))
+           (.settimeout sock# 1)
+           ~@body)
+         (finally
+           (client-close! client#))))))
+
+(defn client-do
+  [client id op & args]
+  (case op
+    :clone
+    (do (client-send! client {:id id :op "clone"})
+        (let [{:keys [status]} (client-recv! client)]
+          status))
+    :eval
+    (do (client-send! client {:id id :op "eval" :code (first args)})
+        (let [{:keys [value]} (client-recv! client)
+              {:keys [status ex] :as all}
+              (client-recv! client)]
+          (cond-> {:value value :status status}
+            ex
+            (assoc :ex ex))))))
+
+(defasync server-run
+  [opts server*]
+  (let [{:keys [_task] :as server} (nr/server-start opts)]
+    (deliver server* server)
+    (await _task)))
+
+
+(deftest server-run-test
+  (let [server* (promise)
+         fut (future
+               (asyncio/run (server-run {} server*)))
+        {:keys [error host nrepl-port-file port shutdown!] :as server}  (deref server* 1000 ::timed-out)]
+    (is (not= ::timed-out server))
+    (is (nil? error) error)
+    (is (= host "127.0.0.1"))
+    (is (os.path/exists nrepl-port-file ))
+    (is port server)
+    (is shutdown! server)
+    (is (not= :timed-out (deref server* 100 :timed-out)))
+    (try
+      (with-connect port
+        (is *nrepl-client*)
+        (is (= ["done"] (client-do *nrepl-client* 1 :clone)))
+        (is (= {:value "4" :status ["done"]} (client-do *nrepl-client* 2 :eval "(+ 1 3)")))
+        (nr/server-shut server)
+        (is (thrown? python/IOError (client-do *nrepl-client* 3 :eval "(+ 1 4)"))))
+      (finally
+        (when shutdown! (shutdown!))))))
+
+#_(pp/pprint (server-run-test))
+
+(def ^:dynamic *nrepl-server*
+  nil)
+
+(defmacro with-server
+  [opts & body]
+  `(let [server*# (promise)
+         fut (future
+               (asyncio/run (server-run ~opts server*#)))
+         {port# :port
+          shutdown!# :shutdown! :as server#}
+         (deref server*# 1000 :timed-out)]
+     (try
+       (binding [*nrepl-server* @server*#]
+         ~@body)
+       (finally (when shutdown!# (shutdown!#))))))
+
+(deftest with-server-test
+  (with-server  {}
+    (let [{:keys [error port]} *nrepl-server*]
+      (is (nil? error) error)
+      (with-connect port
+        (is (= ["done"] (client-do *nrepl-client* 1 :clone)))
+        (is (= {:value "4" :status ["done"]} (client-do *nrepl-client* 2 :eval "(+ 1 3)")))))))
+
+#_(with-server-test)
+
+(deftest nrepl-server-async-test
+  (testing "host option"
+    (with-server  {:host "0.0.0.0"}
+      (let [{:keys [host]} *nrepl-server*]
+        (is (= "0.0.0.0" host)))))
+  
+  (testing "port option"
+    (with-server  {:port -1}
+      (let [{:keys [error ]} *nrepl-server*]
+        (is (= "(:server-make-error OverflowError('bind(): port must be 0-65535.'))" (str error))))))
+
+  (testing "nrepl-port-dir option"
+    (with-server  {:dir *tempdir*}
+      (let [{:keys [nrepl-port-file]} *nrepl-server*]
+        (is (= (str (bio/path *tempdir* ".nrepl-port")) nrepl-port-file))))))
+
+#_(pp/pprint (nrepl-server-async-test))

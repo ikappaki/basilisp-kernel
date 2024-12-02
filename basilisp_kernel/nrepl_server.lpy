@@ -1,0 +1,90 @@
+(ns basilisp-kernel.nrepl-server
+  (:require [basilisp-nrepl-async.nrepl-server :as nr]
+            [basilisp-nrepl-async.utils :as u]
+            [basilisp.string :as str])
+  (:import asyncio
+           os))
+
+(defasync work-task
+  ;; An async task to call `WORK-FN` every `INTERVAL-SEC`onds. It
+  ;; exits when `SHUTDOWN?*` atom becomes truthy. It calls `SHUTDOWN`
+  ;; on exit.
+  [interval-sec work-fn shutdown?* shutdown!]
+  (binding [*out* sys/stdout]
+    (try
+      (loop []
+        (work-fn)
+        (when-not @shutdown?*
+          (await (asyncio/sleep 0.1))
+          (recur)))
+      (catch python/Exception e
+        (println ::work-task-error :exiting (str e)))
+      (finally (shutdown!)))
+    (println ::work-task :exited)))
+
+(defn server-start
+  "Starts the nrepl-server in async mode according to `OPTS`, using a
+  asyncio task to schedule any pending client work every 100ms.
+
+  `OPTS` is a map that can have the following keys. It defaults to {}.
+
+  `:dir` The directory where the `.nrepl-port` file should be created
+  at. It defaults to the current working directory if not given or
+  empty.
+
+  `:host` The interface address the server should be bound to. It
+  defaults to 127.0.0.1 if not given or empty.
+
+  `:port` The port number the server should listen to. It defaults to
+  0, which indicates a random available port number.
+
+  It return the `server`, which is a map with the following keys
+
+  `:host` The host interface to which the server is bound.
+
+  `:nrepl-port-file` The path to the `.nrepl-port` file created by the
+  server.
+
+  `:port` The port on the host interface the server listens for client
+  connections.
+
+  `:shutdown!` A function to shutdown the server."
+  ([]
+   (server-start {}))
+  ([{:keys [host port dir interval-sec] :as opts
+     :or {port 0
+          interval-sec 0.1}}]
+   (let [host (if (or (nil? host) (empty? (str/trim host)))
+                "127.0.0.1"
+                host)
+         nrepl-port-dir (if (or (nil? dir) (empty? (str/trim dir)))
+                          "."
+                          dir)]
+
+     (if (not (os.path/isdir nrepl-port-dir))
+       {:error (u/error-make [:nrepl-server-start :nrepl-port-dir-not-a-dir nrepl-port-dir])}
+
+       (let [{:keys [error work-fn shutdown-fn] :as ret}
+             (nr/server-start! {:async? true
+                                :host host
+                                :port port
+                                :nrepl-port-file (os.path/join nrepl-port-dir ".nrepl-port")})]
+         (if error
+           (binding [*out* sys/stderr]
+             (println :server-start-error (u/error->str error))
+             {:error error})
+
+           (let [shutdown?* (volatile! false)
+                 shutdown! #(do (vreset! shutdown?* true)
+                                (shutdown-fn)
+                                :shut)
+                 loop (asyncio/get-running-loop)
+                 task (.create-task loop (work-task interval-sec work-fn shutdown?* shutdown!))]
+             (-> (select-keys ret [:host :port :nrepl-port-file])
+                 (assoc :shutdown! shutdown!
+                        :_task task)))))))))
+
+(defn ^:inline server-shut
+  "Convenience function to shutdown the `SERVER`."
+  [server]
+  ((:shutdown! server)))

@@ -1,0 +1,169 @@
+(ns tests.basilisp-kernel.integration.notebook-test
+  (:require
+   [basilisp-kernel.nrepl-server :as nr]
+   [tests.basilisp-kernel.nrepl-server-test :as nt]
+   [basilisp.io :as bio]
+   [basilisp.contrib.bencode :as bc]
+   [basilisp-pprint.pprint :as pp]
+   [basilisp.test :refer [deftest are is testing use-fixtures]]
+   [basilisp.test.fixtures :as fixtures :refer [*tempdir*]])
+  (:import [jupyter_client :as jc]
+           nbformat
+           nbclient))
+
+(use-fixtures :each fixtures/tempdir)
+
+(defn notebook-make
+  "Writes the `FORMS` to a `nbformat.v4/new-notebook` and returns it."
+  [forms]
+  (let [nb (nbformat.v4/new-notebook)]
+    (doseq [form forms]
+      (-> nb
+          .-cells
+          (.append (nbformat.v4/new-code-cell (str form)))))
+    nb))
+
+(deftest notebook-execute-test
+  (let [nb (notebook-make ['(+ 4 9)])
+        km (jc/KernelManager ** :kernel-name "basilisp")
+        client (nbclient/NotebookClient nb km)]
+    
+    (try
+      (with [_ (.setup-kernel client)]
+            (let [{:keys [cells metadata] :as all} (py->lisp (.execute client))]
+              (is (= {:language_info
+                      {:mimetype "text/x-clojure",
+                       :name "clojure",
+                       :file_extension ".lpy"}}
+                     metadata))
+
+              (is (= [{:cell_type "code",
+                       :outputs
+                       [{:metadata {},
+                         :output_type "execute_result",
+                         :execution_count 1,
+                         :data {(keyword nil "text/plain") "13"}}]
+                       :execution_count 1,
+                       :source "(+ 4 9)",}]
+                      (for [cell cells]
+                                 (reduce dissoc cell [:id :metadata]))))))
+      (finally
+        (when (.is-alive km) (.shutdown-kernel km ** :now true))))))
+#_(pp/pprint (notebook-execute-test))
+
+(def ^:dynamic *notebook*
+  "It will be bound to the new notebook that `with-notebook` created."
+  nil)
+
+(def ^:dynamic *client*
+  "It Will be bound to the `nbclient/NotebookClient` connected to the
+  Notebook that `with-notebook` created."
+  nil)
+
+
+(defmacro with-notebook
+  "Writes `CELLS` to a new `*notebook*` loaded in a `basilisp` kernel
+  connected to a NoteBook `*client*`. It executes `BODY` in that
+  context."
+  [cells & body]
+  `(let [nb# (notebook-make ~cells)
+         km# (jc/KernelManager ~'** :kernel-name "basilisp")
+         client# (nbclient/NotebookClient nb# km#)]
+    
+     (try
+       (with [_ (.setup-kernel client#)]
+             (binding [*notebook* nb#
+                       *client* client#]
+               ~@body))
+       (finally
+         (when (.is-alive km#) (.shutdown-kernel km# ~'** :now true))))))
+
+#_(pp/pprint (macroexpand-1 '(with-notebook [])))
+
+(deftest with-notebook-test
+  (with-notebook '[(+ 19 20)]
+    (is *notebook*)
+    (is *client*)
+    (let [{:keys [cells]} (py->lisp (.execute *client*))]
+      (is (= {(keyword nil "text/plain") "39"} (get-in cells [0 :outputs 0 :data])) cells))))
+#_(pp/pprint (with-notebook-test))
+
+(defn code-output-text-get
+  [cell]
+  (get-in cell [:outputs 0 :data (keyword nil "text/plain")]))
+
+(defn cell-output-get
+  "Returns the `CELL`'s :outputs in the following format according to their `output_type`:
+
+  ```
+  \"stream\"         {:name name1 :text text1} ...  -> :stream {:name1 text :name2 text
+
+  \"execute_result\" {:data {:text/plain text}}     -> :result {:text text}
+  ```"
+  [cell]
+  (reduce (fn [acc {:keys [output_type] :as output}]
+            ;; (pp/pprint output)
+            (case output_type
+              "stream"
+              (let [{nm :name text :text} output]
+                (assoc-in acc [:stream nm] text))
+              "execute_result"
+              (let [text (get-in output [:data (keyword nil "text/plain")])]
+                (assoc-in acc [:result :text] text))
+              ))
+          {} (:outputs cell)))
+
+(deftest basilisp-notebook-test
+  (testing "multiple cells with cross references"
+    (with-notebook '[(+ 19 20)
+                     (def abc (atom 5))
+                     @abc]
+      (let [{:keys [cells]} (py->lisp (.execute *client*))]
+        (are [i result] (= result (cell-output-get (aget cells i)))
+          0 {:result {:text "39"}}
+          1 {:result {:text "#'user/abc"}}
+          2 {:result {:text "5"}})))))
+#_(pp/pprint (basilisp-notebook-test))
+
+
+(deftest nrepl-server-test
+  (testing "starting server in notebook and remote changing atom"
+    (with-notebook (concat [(list 'def 'tempdir *tempdir*)]
+                           '[(require '[basilisp-kernel.nrepl-server :as bkns])
+                             (def value* (atom 0))
+                             (def server (bkns/server-start {:dir tempdir}))
+                             (:port server)
+                             (deref value*)
+
+                             (deref value*)])
+      (let [cells (.-cells *notebook*)
+            [out-tempdir _out-req out-value* out-server out-port out-value :as executed]
+            (map-indexed (fn [i cell]
+                           (-> (.execute-cell *client* cell ** :cell-index i)
+                               py->lisp
+                               cell-output-get))
+                         (butlast cells))]
+        (is (= {:text "#'user/tempdir"} (:result out-tempdir)) executed)
+        (is (= {:text "#'user/value*"} (:result out-value*)) executed)
+        (let [port-txt (get-in out-port [:result :text])
+              port (int port-txt)]
+          (is (int? port) out-port)
+          (nt/with-connect port
+            (is (= ["done"] (nt/client-do nt/*nrepl-client* 1 :clone)))
+            (is (= {:value (pr-str *tempdir*) :status ["done"]} (nt/client-do nt/*nrepl-client* 2 :eval "tempdir")))
+            (is (= {:value "5" :status ["done"]} (nt/client-do nt/*nrepl-client* 2 :eval "(+ 2 3)")))
+
+            (is (= {:text "0"} (:result out-value)))
+
+            (is (= {:value "1" :status ["done"]} (nt/client-do nt/*nrepl-client* 3 :eval "(swap! value* inc)")))
+
+            (let [out-value-after (-> (.execute-cell *client* (last cells) ** :cell-index 6)
+                                      py->lisp
+                                      cell-output-get)]
+              (is (= {:text "1"} (:result out-value-after)) out-value-after))
+            )
+          )
+        )
+      )))
+#_(pp/pprint (nrepl-server-test))
+
