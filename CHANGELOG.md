@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.2.0
+
 - Added nREPL Server support.
 - Dropped Python 3.8 support and added 3.13 in CI testing.
 - Set minimum Basilisp version to >=0.3.2.

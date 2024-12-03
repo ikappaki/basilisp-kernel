@@ -92,7 +92,7 @@ $ poetry shell
 (<env>) $ jupyter notebook
 ```
 
-3. Open the `dev.ipynb` notebook from the Jupyter interface. Refer to the [basilex-notebook documentation](https://github.com/ikappaki/basilex-notebook) for more details.
+3. Open the `tutorial.ipynb` notebook from the Jupyter interface. Refer to the [basilex-notebook documentation](https://github.com/ikappaki/basilex-notebook) for more details.
 
 ***
 ### 💾 Local Basilisp Files
