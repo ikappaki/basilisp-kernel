@@ -17,9 +17,8 @@ basilisp.init(opts)
 ctx = compiler.CompilerContext(filename="basilisp-kernel", opts=opts)
 eof = object()
 
-user_ns = runtime.Namespace.get_or_create(sym.symbol("user"))
 core_ns = runtime.Namespace.get(runtime.CORE_NS_SYM)
-cli.eval_str("(ns user (:require clojure.core))", ctx, core_ns, eof)
+ns_dyn_var = runtime.Var.find_safe(sym.symbol("*ns*", ns=runtime.CORE_NS))
 
 _DELIMITED_WORD_PATTERN = re.compile(r"[\[\](){\}\s]+")
 
@@ -29,7 +28,7 @@ def do_execute(code):
             runtime.Var.find_safe(sym.symbol("*err*", ns=runtime.CORE_NS)) : sys.stderr
     }):
         try:
-            return cli.eval_str(code, ctx, user_ns, eof)
+            return cli.eval_str(code, ctx, ns_dyn_var.deref(), eof)
         except reader.SyntaxError as e:
             msg = "".join(format_exception(e, reader.SyntaxError, e.__traceback__))
             raise reader.SyntaxError(msg) from None
@@ -54,6 +53,10 @@ class BasilispKernel(IPythonKernel):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.imported = False
+        runtime.set_current_ns("user")
+        with runtime.ns_bindings("user") as ns:
+            ns.refer_all(core_ns)
+
 
     def do_complete(self, acode, cursor_pos):
         code = acode[:cursor_pos]

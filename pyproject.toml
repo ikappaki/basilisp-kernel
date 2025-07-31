@@ -23,7 +23,7 @@ requires-python = ">=3.9"
 dependencies = [
     "ipykernel",
     "jupyter_client",
-    "basilisp>=0.3.2",
+    "basilisp>=0.4.0",
     "basilisp-nrepl-async>=0.1.0",
 ]
 
