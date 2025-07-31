@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Set minimum Basilisp version to >=0.4.0
+- Fix import alias resolution after defining a new namespace (#6)
+
 ## 1.2.0
 
 - Added nREPL Server support.

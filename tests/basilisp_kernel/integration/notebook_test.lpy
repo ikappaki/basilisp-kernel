@@ -42,11 +42,11 @@
                        [{:metadata {},
                          :output_type "execute_result",
                          :execution_count 1,
-                         :data {(keyword nil "text/plain") "13"}}]
+                         :data {:text/plain "13"}}]
                        :execution_count 1,
                        :source "(+ 4 9)",}]
                       (for [cell cells]
-                                 (reduce dissoc cell [:id :metadata]))))))
+                        (reduce dissoc cell [:id :metadata]))))))
       (finally
         (when (.is-alive km) (.shutdown-kernel km ** :now true))))))
 #_(pp/pprint (notebook-execute-test))
@@ -85,12 +85,12 @@
     (is *notebook*)
     (is *client*)
     (let [{:keys [cells]} (py->lisp (.execute *client*))]
-      (is (= {(keyword nil "text/plain") "39"} (get-in cells [0 :outputs 0 :data])) cells))))
+      (is (= {:text/plain "39"} (get-in cells [0 :outputs 0 :data])) cells))))
 #_(pp/pprint (with-notebook-test))
 
 (defn code-output-text-get
   [cell]
-  (get-in cell [:outputs 0 :data (keyword nil "text/plain")]))
+  (get-in cell [:outputs 0 :data :text/plain]))
 
 (defn cell-output-get
   "Returns the `CELL`'s :outputs in the following format according to their `output_type`:
@@ -108,7 +108,7 @@
               (let [{nm :name text :text} output]
                 (assoc-in acc [:stream nm] text))
               "execute_result"
-              (let [text (get-in output [:data (keyword nil "text/plain")])]
+              (let [text (get-in output [:data :text/plain])]
                 (assoc-in acc [:result :text] text))
               ))
           {} (:outputs cell)))
@@ -125,6 +125,18 @@
           2 {:result {:text "5"}})))))
 #_(pp/pprint (basilisp-notebook-test))
 
+
+(deftest ns-change-import-test
+  (testing "defining a new namespace and using import aliases"
+    (with-notebook '[(ns test.test)
+                     (import [math :as m])
+                     (m/sqrt 4)]
+      (let [{:keys [cells]} (py->lisp (.execute *client*))]
+        (are [i result] (= result (cell-output-get (aget cells i)))
+          0 {}
+          1 {}
+          2 {:result {:text "2.0"}})))))
+#_(pp/pprint (ns-change-import-test))
 
 (deftest nrepl-server-test
   (testing "starting server in notebook and remote changing atom"
