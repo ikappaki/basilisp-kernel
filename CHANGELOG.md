@@ -2,8 +2,10 @@
 
 ## Unreleased
 
-- Set minimum Basilisp version to >=0.4.0
-- Fix import alias resolution after defining a new namespace (#6)
+## 1.3.0
+
+- Set minimum Basilisp version to >=0.4.0 (#7)
+- Fix import alias resolution issue after defining a new namespace (#6)
 
 ## 1.2.0
 
